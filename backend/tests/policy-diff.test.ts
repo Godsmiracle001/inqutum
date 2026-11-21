@@ -51,4 +51,16 @@ describe('permission diff preview before policy changes (#486)', () => {
     const preview = previewPolicyChange(DEFAULT_POLICY, proposed, admin);
     assert.throws(() => applyReviewedPolicyPreview(DEFAULT_POLICY, proposed, preview, viewer, true), /POLICY_PREVIEW_FORBIDDEN/);
   });
+  it('rebuilds and retries a preview after a concurrent policy update', () => {
+    const original = policy({ maxAmount: 100 });
+    const proposed = policy({ maxAmount: 250 });
+    const stale = previewPolicyChange(original, proposed, admin);
+    const latest = policy({ maxAmount: 125 });
+    assert.throws(() => applyReviewedPolicyPreview(latest, proposed, stale, admin, true), /POLICY_PREVIEW_STALE/);
+
+    const refreshed = previewPolicyChange(latest, proposed, admin);
+    assert.equal(refreshed.allowed, true);
+    assert.deepEqual(applyReviewedPolicyPreview(latest, proposed, refreshed, admin, true), proposed);
+  });
+
 });
