@@ -295,7 +295,7 @@ describe('Safe Ownership Transfer (#300)', () => {
 
 
 describe('ownership transfer expiry boundary regression (#484)', () => {
-  it('expires at the exact deadline and preserves the current owner', () => {
+  it('accepts immediately before the deadline and transfers ownership', () => {
     let clock = new Date('2026-11-21T12:00:00.000Z');
     const owner = 'G_OWNER';
     const nominee = 'G_NOMINEE';
