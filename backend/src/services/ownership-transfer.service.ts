@@ -362,9 +362,10 @@ export class OwnershipTransferService {
 
     for (const record of this.transfers.values()) {
       if (record.resourceId === resourceId) {
-        if (record.status === 'PENDING_ACCEPTANCE' && now > record.expiresAt.getTime()) {
+        if (record.status === 'PENDING_ACCEPTANCE' && now >= record.expiresAt.getTime()) {
           record.status = 'EXPIRED';
           this.activePendingByResource.delete(resourceId);
+          this.emitAudit('OWNERSHIP_TRANSFER_EXPIRED', record, 'system', {});
         }
         results.push(record);
       }
