@@ -292,3 +292,49 @@ describe('Safe Ownership Transfer (#300)', () => {
     assert.ok(types.includes('OWNERSHIP_TRANSFER_ACCEPTED'));
   });
 });
+
+
+describe('ownership transfer expiry boundary regression (#484)', () => {
+  it('expires at the exact deadline and preserves the current owner', () => {
+    let clock = new Date('2026-11-21T12:00:00.000Z');
+    const owner = 'G_OWNER';
+    const nominee = 'G_NOMINEE';
+    const resource = 'org-boundary';
+    const service = new OwnershipTransferService(undefined, 48 * 60 * 60 * 1000, () => clock);
+    service.registerResourceOwner(resource, owner);
+    const transfer = service.initiateTransfer({
+      resourceType: 'ORGANIZATION',
+      resourceId: resource,
+      currentOwnerId: owner,
+      targetOwnerId: nominee,
+      reason: 'Boundary test',
+      ttlMs: 1000,
+    });
+
+    clock = new Date(transfer.expiresAt.getTime() - 1);
+    assert.equal(service.acceptTransfer(transfer.id, nominee).status, 'ACCEPTED');
+    assert.equal(service.getResourceOwner(resource), nominee);
+  });
+
+  it('rejects acceptance exactly at expiresAt (not one millisecond later)', () => {
+    let clock = new Date('2026-11-21T12:00:00.000Z');
+    const owner = 'G_OWNER';
+    const nominee = 'G_NOMINEE';
+    const resource = 'org-expiry-boundary';
+    const service = new OwnershipTransferService(undefined, 48 * 60 * 60 * 1000, () => clock);
+    service.registerResourceOwner(resource, owner);
+    const transfer = service.initiateTransfer({
+      resourceType: 'ORGANIZATION',
+      resourceId: resource,
+      currentOwnerId: owner,
+      targetOwnerId: nominee,
+      reason: 'Exact expiry test',
+      ttlMs: 1000,
+    });
+
+    clock = new Date(transfer.expiresAt);
+    assert.throws(() => service.acceptTransfer(transfer.id, nominee), (error: any) => error.code === 'TRANSFER_EXPIRED');
+    assert.equal(service.getResourceOwner(resource), owner);
+    assert.equal(service.getTransfer(transfer.id)?.status, 'EXPIRED');
+  });
+});
