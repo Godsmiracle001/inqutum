@@ -17,6 +17,8 @@ import {
   createWebhookStaleTimestampFixture,
   createWebhookForgedHmacFixture,
   createCorruptedAuditChainFixture,
+  createValidWebhookFixture,
+  createValidQueuedJobFixture,
 } from '../src/sandbox/rare-failure-fixtures';
 import {
   verifyHorizonPayment,
@@ -325,5 +327,36 @@ describe('Rare Failure & Recovery Fixture Generators (Issue #299)', () => {
       assert.equal(afterTamper.failure?.reason, 'event_hash');
       assert.equal(afterTamper.failure?.index, 0);
     });
+  });
+});
+
+
+describe('rare-failure fixture reproducibility (#483)', () => {
+  it('produces byte-identical retry, expiry, authorization and audit fixtures for a fixed anchor', () => {
+    const anchor = new Date('2026-11-21T12:00:00.000Z');
+    const build = () => ({
+      webhook: createValidWebhookFixture({}, anchor),
+      queuedJob: createValidQueuedJobFixture({}, anchor),
+      expiredInvoice: createExpiredInvoiceSettlementRaceFixture(anchor),
+      deadLetter: createDeadLetterJobEscalationFixture({}, anchor),
+      staleLock: createStaleJobLockRecoveryFixture(anchor),
+      rateLimit: createTransientHorizonRateLimitFixture(anchor),
+      missingApproval: createMaintainerMissingSecondApproverFixture('fixture-secret', anchor),
+      expiredApproval: createMaintainerExpiredTtlFixture('fixture-secret', anchor),
+      staleWebhook: createWebhookStaleTimestampFixture(anchor),
+      forgedWebhook: createWebhookForgedHmacFixture(anchor),
+      corruptedAudit: createCorruptedAuditChainFixture(anchor),
+    });
+
+    assert.deepEqual(build(), build());
+  });
+
+  it('keeps time-relative fixture semantics when the anchor changes', () => {
+    const first = new Date('2026-11-21T12:00:00.000Z');
+    const second = new Date(first.getTime() + 60_000);
+    const a = createStaleJobLockRecoveryFixture(first);
+    const b = createStaleJobLockRecoveryFixture(second);
+    assert.equal(new Date(b.lockedUntil!).getTime() - new Date(a.lockedUntil!).getTime(), 60_000);
+    assert.equal(new Date(b.runAt).getTime() - new Date(a.runAt).getTime(), 60_000);
   });
 });
