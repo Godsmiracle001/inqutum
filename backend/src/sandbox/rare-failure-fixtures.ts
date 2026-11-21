@@ -148,8 +148,8 @@ export function createValidAssetPaymentFixture(overrides: Partial<PaymentFixture
 /**
  * Generates a normal background job in queued state.
  */
-export function createValidQueuedJobFixture(overrides: Partial<Job> = {}): Job {
-  const now = new Date().toISOString();
+export function createValidQueuedJobFixture(overrides: Partial<Job> = {}, anchor: Date = new Date()): Job {
+  const now = anchor.toISOString();
   return {
     id: overrides.id ?? 'job-norm-001',
     type: overrides.type ?? 'invoice.export_pdf',
