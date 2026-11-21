@@ -342,7 +342,7 @@ export class OwnershipTransferService {
     const transfer = this.transfers.get(transferId);
     if (!transfer) return undefined;
 
-    if (transfer.status === 'PENDING_ACCEPTANCE' && Date.now() > transfer.expiresAt.getTime()) {
+    if (transfer.status === 'PENDING_ACCEPTANCE' && this.now().getTime() >= transfer.expiresAt.getTime()) {
       transfer.status = 'EXPIRED';
       this.activePendingByResource.delete(transfer.resourceId);
       this.emitAudit('OWNERSHIP_TRANSFER_EXPIRED', transfer, 'system', {});
