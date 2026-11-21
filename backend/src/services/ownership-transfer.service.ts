@@ -59,7 +59,8 @@ export class OwnershipTransferService {
 
   constructor(
     private readonly auditCallback?: OwnershipTransferAuditCallback,
-    private readonly defaultTtlMs = 48 * 60 * 60 * 1000 // 48 hours
+    private readonly defaultTtlMs = 48 * 60 * 60 * 1000, // 48 hours
+    private readonly now: () => Date = () => new Date()
   ) {}
 
   /**
@@ -106,7 +107,7 @@ export class OwnershipTransferService {
       const existing = this.transfers.get(existingTransferId);
       if (existing && existing.status === 'PENDING_ACCEPTANCE') {
         // Evaluate expiry lazily
-        if (Date.now() > existing.expiresAt.getTime()) {
+        if (this.now().getTime() >= existing.expiresAt.getTime()) {
           existing.status = 'EXPIRED';
           this.activePendingByResource.delete(input.resourceId);
         } else {
@@ -118,7 +119,7 @@ export class OwnershipTransferService {
     // 5. Generate record with cryptographically secure token
     const id = crypto.randomUUID();
     const transferToken = crypto.randomBytes(32).toString('hex');
-    const now = new Date();
+    const now = this.now();
     const ttlMs = input.ttlMs && input.ttlMs > 0 ? input.ttlMs : this.defaultTtlMs;
     const expiresAt = new Date(now.getTime() + ttlMs);
 
@@ -178,7 +179,7 @@ export class OwnershipTransferService {
     }
 
     // 3. Expiry check
-    if (Date.now() > transfer.expiresAt.getTime()) {
+    if (this.now().getTime() >= transfer.expiresAt.getTime()) {
       transfer.status = 'EXPIRED';
       this.activePendingByResource.delete(transfer.resourceId);
       this.emitAudit('OWNERSHIP_TRANSFER_EXPIRED', transfer, acceptorId, {});
@@ -188,7 +189,7 @@ export class OwnershipTransferService {
     // 4. Atomic execution: reassign owner
     const previousOwnerId = transfer.currentOwnerId;
     transfer.status = 'ACCEPTED';
-    transfer.acceptedAt = new Date();
+    transfer.acceptedAt = this.now();
     this.resourceOwners.set(transfer.resourceId, transfer.targetOwnerId);
     this.activePendingByResource.delete(transfer.resourceId);
 
@@ -224,7 +225,7 @@ export class OwnershipTransferService {
     }
 
     transfer.status = 'CANCELLED';
-    transfer.cancelledAt = new Date();
+    transfer.cancelledAt = this.now();
     this.activePendingByResource.delete(transfer.resourceId);
 
     this.emitAudit('OWNERSHIP_TRANSFER_CANCELLED', transfer, actorId, {
@@ -257,7 +258,7 @@ export class OwnershipTransferService {
     }
 
     transfer.status = 'REJECTED';
-    transfer.rejectedAt = new Date();
+    transfer.rejectedAt = this.now();
     this.activePendingByResource.delete(transfer.resourceId);
 
     this.emitAudit('OWNERSHIP_TRANSFER_REJECTED', transfer, actorId, {
@@ -357,7 +358,7 @@ export class OwnershipTransferService {
    */
   public listTransfers(resourceId: string): OwnershipTransferRecord[] {
     const results: OwnershipTransferRecord[] = [];
-    const now = Date.now();
+    const now = this.now().getTime();
 
     for (const record of this.transfers.values()) {
       if (record.resourceId === resourceId) {
@@ -391,7 +392,7 @@ export class OwnershipTransferService {
   ): void {
     const entry: OwnershipTransferAuditEntry = {
       id: crypto.randomUUID(),
-      timestamp: new Date().toISOString(),
+      timestamp: this.now().toISOString(),
       type,
       transferId: record.id,
       resourceType: record.resourceType,
