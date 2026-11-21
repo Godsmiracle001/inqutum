@@ -174,9 +174,9 @@ export function createValidQueuedJobFixture(overrides: Partial<Job> = {}): Job {
 /**
  * Generates a normal webhook delivery bundle with valid signature and fresh timestamp.
  */
-export function createValidWebhookFixture(overrides: Partial<WebhookFixtureBundle> = {}): WebhookFixtureBundle {
+export function createValidWebhookFixture(overrides: Partial<WebhookFixtureBundle> = {}, now: Date = new Date()): WebhookFixtureBundle {
   const secret = overrides.secret ?? 'super_secret_webhook_key_2026';
-  const timestamp = overrides.timestamp ?? String(Math.floor(Date.now() / 1000));
+  const timestamp = overrides.timestamp ?? String(Math.floor(now.getTime() / 1000));
   const payload = overrides.payload ?? {
     event: 'invoice.paid',
     invoiceId: 'inv-100',
@@ -310,8 +310,8 @@ export function createMultiOperationPaymentFixture(targetValid = true): PaymentF
 /**
  * Generates an expired invoice state fixture to test settlement race conditions.
  */
-export function createExpiredInvoiceSettlementRaceFixture() {
-  const now = Date.now();
+export function createExpiredInvoiceSettlementRaceFixture(now: Date = new Date()) {
+  const anchor = now.getTime();
   return {
     invoice: {
       id: 'inv-expired-race-01',
@@ -320,7 +320,7 @@ export function createExpiredInvoiceSettlementRaceFixture() {
       destination: FIXTURE_ACCOUNTS.seller,
       memo: 'INV-EXP-01',
       assetCode: 'XLM',
-      expiresAt: new Date(now - 60_000).toISOString(),
+      expiresAt: new Date(anchor - 60_000).toISOString(),
     },
     payment: createValidNativePaymentFixture({
       expected: {
@@ -342,7 +342,7 @@ export function createExpiredInvoiceSettlementRaceFixture() {
  * Generates a dead-letter job fixture that has exhausted all maxAttempts
  * and contains complete diagnostic error history.
  */
-export function createDeadLetterJobEscalationFixture(overrides: Partial<Job> = {}): JobFailureRecoveryBundle {
+export function createDeadLetterJobEscalationFixture(overrides: Partial<Job> = {}, now: Date = new Date()): JobFailureRecoveryBundle {
   const policy: RetryPolicy = {
     maxAttempts: 3,
     baseDelayMs: 500,
@@ -350,9 +350,9 @@ export function createDeadLetterJobEscalationFixture(overrides: Partial<Job> = {
     maxDelayMs: 2000,
   };
   const errors = [
-    { attempt: 1, at: new Date(Date.now() - 30_000).toISOString(), message: 'Horizon gateway timeout (504)' },
-    { attempt: 2, at: new Date(Date.now() - 20_000).toISOString(), message: 'Horizon connection reset (ECONNRESET)' },
-    { attempt: 3, at: new Date(Date.now() - 10_000).toISOString(), message: 'Max attempts exhausted: Horizon unreachable' },
+    { attempt: 1, at: new Date(now.getTime() - 30_000).toISOString(), message: 'Horizon gateway timeout (504)' },
+    { attempt: 2, at: new Date(now.getTime() - 20_000).toISOString(), message: 'Horizon connection reset (ECONNRESET)' },
+    { attempt: 3, at: new Date(now.getTime() - 10_000).toISOString(), message: 'Max attempts exhausted: Horizon unreachable' },
   ];
 
   const job: Job = {
@@ -362,15 +362,15 @@ export function createDeadLetterJobEscalationFixture(overrides: Partial<Job> = {
     status: 'dead',
     attempts: 3,
     retryPolicy: policy,
-    runAt: new Date().toISOString(),
+    runAt: now.toISOString(),
     lockedUntil: null,
     lockedBy: null,
     idempotencyKey: 'idem-dead-001',
     correlationId: 'corr-dead-001',
     errors,
     result: null,
-    createdAt: new Date(Date.now() - 60_000).toISOString(),
-    updatedAt: new Date().toISOString(),
+    createdAt: new Date(now.getTime() - 60_000).toISOString(),
+    updatedAt: now.toISOString(),
     completedAt: null,
     ...overrides,
   };
@@ -386,8 +386,8 @@ export function createDeadLetterJobEscalationFixture(overrides: Partial<Job> = {
  * Generates an orphaned job with an expired worker lease (crashed worker simulation).
  * Demonstrates stale lock recovery where lockedUntil < now.
  */
-export function createStaleJobLockRecoveryFixture(): Job {
-  const pastTime = new Date(Date.now() - 60_000).toISOString();
+export function createStaleJobLockRecoveryFixture(now: Date = new Date()): Job {
+  const pastTime = new Date(now.getTime() - 60_000).toISOString();
   return {
     id: 'job-crashed-worker-001',
     type: 'invoice.settlement_verify',
@@ -395,14 +395,14 @@ export function createStaleJobLockRecoveryFixture(): Job {
     status: 'running',
     attempts: 1,
     retryPolicy: { ...DEFAULT_RETRY_POLICY },
-    runAt: new Date(Date.now() - 120_000).toISOString(),
+    runAt: new Date(now.getTime() - 120_000).toISOString(),
     lockedUntil: pastTime, // Lease expired 1 minute ago!
     lockedBy: 'worker-dead-pid-9999',
     idempotencyKey: 'idem-crash-001',
     correlationId: 'corr-crash-001',
     errors: [],
     result: null,
-    createdAt: new Date(Date.now() - 120_000).toISOString(),
+    createdAt: new Date(now.getTime() - 120_000).toISOString(),
     updatedAt: pastTime,
     completedAt: null,
   };
@@ -411,14 +411,14 @@ export function createStaleJobLockRecoveryFixture(): Job {
 /**
  * Generates a transient Horizon 429 rate-limited response structure with retry headers.
  */
-export function createTransientHorizonRateLimitFixture() {
+export function createTransientHorizonRateLimitFixture(now: Date = new Date()) {
   return {
     status: 429,
     headers: {
       'retry-after': '3',
       'x-ratelimit-limit': '3600',
       'x-ratelimit-remaining': '0',
-      'x-ratelimit-reset': String(Math.floor(Date.now() / 1000) + 3),
+      'x-ratelimit-reset': String(Math.floor(now.getTime() / 1000) + 3),
     },
     body: {
       type: 'https://stellar.org/horizon-errors/rate_limit_exceeded',
@@ -437,8 +437,7 @@ export function createTransientHorizonRateLimitFixture() {
  * Generates a maintainer intent fixture that requires a second approver
  * but is executed without approval (asserts APPROVAL_REQUIRED).
  */
-export function createMaintainerMissingSecondApproverFixture(secret = 'a'.repeat(32)): MaintainerAuthFixtureBundle {
-  const now = new Date();
+export function createMaintainerMissingSecondApproverFixture(secret = 'a'.repeat(32), now: Date = new Date()): MaintainerAuthFixtureBundle {
   const intent: MaintainerIntent = {
     id: 'intent-missing-second-01',
     action: 'invoice.cancel',
@@ -466,8 +465,8 @@ export function createMaintainerMissingSecondApproverFixture(secret = 'a'.repeat
 /**
  * Generates an expired maintainer intent (asserts INTENT_EXPIRED).
  */
-export function createMaintainerExpiredTtlFixture(secret = 'a'.repeat(32)): MaintainerAuthFixtureBundle {
-  const expiredTime = new Date(Date.now() - 300_000).toISOString();
+export function createMaintainerExpiredTtlFixture(secret = 'a'.repeat(32), now: Date = new Date()): MaintainerAuthFixtureBundle {
+  const expiredTime = new Date(now.getTime() - 300_000).toISOString();
   const intent: MaintainerIntent = {
     id: 'intent-expired-ttl-01',
     action: 'job.requeue_dead',
@@ -478,7 +477,7 @@ export function createMaintainerExpiredTtlFixture(secret = 'a'.repeat(32)): Main
     params: {},
     paramsHash: createHash('sha256').update(canonicalJson({})).digest('hex'),
     confirmationPhrase: 'job.requeue_dead job-123',
-    createdAt: new Date(Date.now() - 900_000).toISOString(),
+    createdAt: new Date(now.getTime() - 900_000).toISOString(),
     expiresAt: expiredTime, // Already expired!
     status: 'approved',
     risk: null,
@@ -495,8 +494,8 @@ export function createMaintainerExpiredTtlFixture(secret = 'a'.repeat(32)): Main
 /**
  * Generates a webhook fixture with a stale timestamp (> 300 seconds old, replay attack vector).
  */
-export function createWebhookStaleTimestampFixture(): WebhookFixtureBundle {
-  const staleTimestamp = String(Math.floor(Date.now() / 1000) - 600); // 10 minutes ago
+export function createWebhookStaleTimestampFixture(now: Date = new Date()): WebhookFixtureBundle {
+  const staleTimestamp = String(Math.floor(now.getTime() / 1000) - 600); // 10 minutes ago
   const secret = 'webhook_secret_key_prod_test';
   const payload = { event: 'invoice.paid', invoiceId: 'inv-stale-01' };
   const signature = signWebhookPayload(payload, secret, staleTimestamp);
@@ -512,8 +511,8 @@ export function createWebhookStaleTimestampFixture(): WebhookFixtureBundle {
 /**
  * Generates a webhook fixture with a forged/tampered signature.
  */
-export function createWebhookForgedHmacFixture(): WebhookFixtureBundle {
-  const timestamp = String(Math.floor(Date.now() / 1000));
+export function createWebhookForgedHmacFixture(now: Date = new Date()): WebhookFixtureBundle {
+  const timestamp = String(Math.floor(now.getTime() / 1000));
   const secret = 'valid_secret_key_123456';
   const payload = { event: 'invoice.paid', invoiceId: 'inv-forged-01' };
   const signature = 'sha256=' + '0'.repeat(64); // Invalid signature
@@ -529,11 +528,11 @@ export function createWebhookForgedHmacFixture(): WebhookFixtureBundle {
 /**
  * Generates a tampered audit trail where an intermediate block's hash or payload was corrupted.
  */
-export function createCorruptedAuditChainFixture() {
+export function createCorruptedAuditChainFixture(now: Date = new Date()) {
   const baseEvent = (id: string, prevHash: string | null): AuditEvent => {
     const raw: Omit<AuditEvent, 'hash'> = {
       id,
-      timestamp: new Date().toISOString(),
+      timestamp: now.toISOString(),
       action: 'INVOICE_CREATED',
       actor: { type: 'seller', id: FIXTURE_ACCOUNTS.seller },
       scope: { entityType: 'invoice', entityId: id },
