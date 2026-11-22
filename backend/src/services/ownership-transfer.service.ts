@@ -85,7 +85,12 @@ export class OwnershipTransferService {
   public initiateTransfer(input: InitiateTransferInput): OwnershipTransferRecord {
     // 1. Authorization: verify initiator is the current owner
     const registeredOwner = this.resourceOwners.get(input.resourceId);
-    if (registeredOwner && registeredOwner !== input.currentOwnerId) {
+    if (!registeredOwner) {
+      throw new UnauthorizedTransferError(
+        `Resource '${input.resourceId}' has no registered owner; ownership must be established before a transfer can be initiated.`
+      );
+    }
+    if (registeredOwner !== input.currentOwnerId) {
       throw new UnauthorizedTransferError(
         `Actor '${input.currentOwnerId}' is not the current owner of ${input.resourceType} '${input.resourceId}'.`
       );
