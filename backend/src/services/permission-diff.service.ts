@@ -1,5 +1,5 @@
 /**
- * Permission Diff Service (Issue #302).
+ * Permission Diff Service (Issue #486).
  *
  * Computes deterministic permission diff reports before committing role or policy changes.
  * Enforces least-privilege principles, detects dangerous privilege escalation, flags
