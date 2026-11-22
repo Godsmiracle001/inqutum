@@ -11,7 +11,7 @@ import {
   InvalidTargetOwnerError,
 } from '../src/domain/ownership-transfer';
 
-describe('Safe Ownership Transfer (#300)', () => {
+describe('Safe Ownership Transfer (#484)', () => {
   let service: OwnershipTransferService;
   let auditLogs: Array<{ type: string; actorId: string; details: any }> = [];
 
