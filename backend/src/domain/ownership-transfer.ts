@@ -1,5 +1,5 @@
 /**
- * Safe Ownership Transfer Domain Model (Issue #300).
+ * Safe Ownership Transfer Domain Model (Issue #484).
  *
  * Implements two-step ownership transfer with pending acceptance and time-based
  * expiration. Protects accounts and organizations against accidental lockouts,
