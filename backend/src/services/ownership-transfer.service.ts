@@ -1,5 +1,5 @@
 /**
- * Safe Ownership Transfer Service (Issue #300).
+ * Safe Ownership Transfer Service (Issue #484).
  *
  * Coordinates the multi-step lifecycle of ownership reassignment:
  *  1. Initiation with TTL and secret token.
