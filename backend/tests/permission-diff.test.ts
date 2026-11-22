@@ -8,7 +8,7 @@ import {
 } from '../src/domain/permission-diff';
 import { DEFAULT_POLICY } from '../src/domain/policy';
 
-describe('Permission-Diff Report Engine (#302)', () => {
+describe('Permission-Diff Report Engine (#486)', () => {
   const service = new PermissionDiffService();
 
   it('normal path: generates clean role permission diff with added and retained permissions', () => {
