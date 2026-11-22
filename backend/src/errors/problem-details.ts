@@ -1,5 +1,5 @@
 /**
- * Stable Problem-Details Error Taxonomy — Issue #439
+ * Stable Problem-Details Error Taxonomy — Issue #487
  *
  * Maps the existing domain error taxonomy into a valid RFC 7807 / IANA
  * "application/problem+json" envelope so every failure response carries the
