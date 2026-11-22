@@ -1,5 +1,5 @@
 /**
- * Issue #439 — Stable problem-details error taxonomy.
+ * Issue #487 — Stable problem-details error taxonomy.
  *
  * Covers the four acceptance-criteria paths:
  *   1. Normal path  — toProblemDetails produces all RFC 7807 required fields
