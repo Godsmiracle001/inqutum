@@ -36,7 +36,7 @@ import {
 } from '../src/webhooks/webhook-verification';
 import { MemoryAuditStore } from '../src/audit/audit-service';
 
-describe('Rare Failure & Recovery Fixture Generators (Issue #299)', () => {
+describe('Rare Failure & Recovery Fixture Generators (Issue #483)', () => {
   /* ------------------------------------------------------------------------ */
   /* Normal Paths                                                             */
   /* ------------------------------------------------------------------------ */
