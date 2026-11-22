@@ -28,6 +28,25 @@ describe('Safe Ownership Transfer (#300)', () => {
     service.registerResourceOwner(ORG_ID, OWNER_ALICE);
   });
 
+  it('fails closed when a resource has no registered owner', () => {
+    assert.throws(
+      () => service.initiateTransfer({
+        resourceType: 'ORGANIZATION',
+        resourceId: 'unregistered-org',
+        currentOwnerId: ATTACKER_EVE,
+        targetOwnerId: NOMINEE_BOB,
+        reason: 'Attempt to claim an unregistered resource',
+      }),
+      (err: any) => {
+        assert.ok(err instanceof UnauthorizedTransferError);
+        assert.strictEqual(err.code, 'UNAUTHORIZED_OWNERSHIP_OPERATION');
+        assert.strictEqual(err.httpStatus, 403);
+        return true;
+      }
+    );
+    assert.strictEqual(service.getResourceOwner('unregistered-org'), undefined);
+  });
+
   it('normal path: two-step transfer initiation and acceptance transfers ownership cleanly', () => {
     // 1. Alice initiates transfer to Bob
     const transfer = service.initiateTransfer({
