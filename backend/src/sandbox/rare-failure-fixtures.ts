@@ -1,5 +1,5 @@
 /**
- * Fixture generators for rare failure, retry, authorization, and recovery paths (issue #299).
+ * Fixture generators for rare failure, retry, authorization, and recovery paths (issue #483).
  *
  * Provides deterministic, production-grade fixture generators for simulating:
  * 1. Normal Paths: valid native XLM & tokenized assets, background jobs, dual approval, webhook delivery.
