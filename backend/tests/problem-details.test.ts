@@ -350,7 +350,7 @@ describe('toProblemDetails — redaction', () => {
     assert.ok(doc.recoveryAction.includes('[REDACTED_TOKEN]'));
     assert.ok(doc.remediation?.[0].includes('[REDACTED]'));
     assert.ok(doc.fieldErrors?.[0].message.includes('[REDACTED_SECRET_KEY]'));
-    assert.ok(doc.fieldErrors?.[0].hint.includes('[REDACTED_TOKEN]'));
+    assert.ok(doc.fieldErrors?.[0].hint?.includes('[REDACTED_TOKEN]'));
   });
 });
 
