@@ -57,6 +57,23 @@ function computeBackoffMs(policy, attempt) {
   return Math.min(Number.isFinite(exp) ? exp : policy.maxDelayMs, policy.maxDelayMs);
 }
 
+function computeJitteredBackoffMs(policy, attempt, randFn = Math.random) {
+  const base = computeBackoffMs(policy, attempt);
+  const jitterFraction = typeof randFn === 'function' ? randFn() : 0.5;
+  const clampedFraction = Math.max(0, Math.min(1, Number.isFinite(jitterFraction) ? jitterFraction : 0.5));
+  return Math.round(base * clampedFraction);
+}
+
+function isAuthorizedInWindow(tokenIssuedAt, expiresAt, evaluatedAt, clockSkewLeewayMs = 300000) {
+  const issued = new Date(tokenIssuedAt).getTime();
+  const exp = new Date(expiresAt).getTime();
+  const current = new Date(evaluatedAt).getTime();
+  if (!Number.isFinite(issued) || !Number.isFinite(exp) || !Number.isFinite(current)) return false;
+  if (!Number.isFinite(clockSkewLeewayMs) || clockSkewLeewayMs < 0) return false;
+  // Valid if issued <= current + leeway AND current - leeway < exp
+  return (issued <= current + clockSkewLeewayMs) && (current - clockSkewLeewayMs < exp);
+}
+
 // Pseudo-random generator for deterministic, repeatable property test runs
 function makePrng(seed = 1337) {
   let s = seed >>> 0;
@@ -112,6 +129,33 @@ test('Issue #382: Property tests for boundary numeric and timestamp values', asy
     }
   });
 
+  await t.test('Normal path property: large Stellar amounts up to safe integer stroop boundary and scientific notation invariance', () => {
+    // Upper safe integer stroop boundary: 900,000,000 XLM is well within safe integer stroop capacity
+    const safeLargeAmount = 900000000;
+    assert.equal(amountsMatch(safeLargeAmount, safeLargeAmount, 0), true);
+    assert.equal(amountsMatch(String(safeLargeAmount), safeLargeAmount, 0), true);
+
+    // Amounts exceeding MAX_SAFE_INTEGER stroops (> 2^53 - 1 stroops) must be rejected for precision safety
+    assert.equal(amountsMatch(MAX_STELLAR_AMOUNT, MAX_STELLAR_AMOUNT, 0), false, 'Amounts exceeding safe integer stroops must be safely rejected');
+
+    // Scientific notation invariance
+    assert.equal(amountsMatch('1e-7', '0.0000001', 0), true);
+    assert.equal(amountsMatch('1.5e2', '150.0000000', 0), true);
+    assert.equal(amountsMatch('1e-6', '0.0000010', 0), true);
+  });
+
+  await t.test('Normal path property: sub-stroop precision boundary and fractional rounding invariants', () => {
+    // Amounts within 0.4 stroops round to the same stroop integer
+    const base = '50.1234567';
+    const subStroopDiff = '50.12345674'; // Differs by 0.4 stroops (< 0.5)
+    assert.equal(amountsMatch(base, subStroopDiff, 0), true, 'Sub-half-stroop difference should round to same stroop');
+
+    // Amounts differing by 1 stroop: fail at tolerance 0, pass at tolerance 1
+    const oneStroopDiff = '50.1234568';
+    assert.equal(amountsMatch(base, oneStroopDiff, 0), false, '1 stroop delta should fail with tolerance 0');
+    assert.equal(amountsMatch(base, oneStroopDiff, 1), true, '1 stroop delta should pass with tolerance 1');
+  });
+
   await t.test('Failure path property: rejects non-finite, sub-stroop or negative numbers gracefully', () => {
     const invalidInputs = [
       -1,
@@ -135,6 +179,19 @@ test('Issue #382: Property tests for boundary numeric and timestamp values', asy
       assert.equal(amountsMatch(10, bad, 0), false, `Should reject invalid input: ${String(bad)}`);
       assert.equal(amountsMatch(bad, 10, 0), false, `Should reject invalid input: ${String(bad)}`);
     }
+  });
+
+  await t.test('Failure path property: malformed literals, multi-decimal, and negative zero handling', () => {
+    const malformed = ['1.2.3', '10..5', '0x10', '0o77', '0b101', 'NaN', 'null', 'undefined', '10,000'];
+    for (const bad of malformed) {
+      if (isNaN(Number(bad))) {
+        assert.equal(amountsMatch(10, bad, 0), false, `Should reject malformed number ${bad}`);
+      }
+    }
+
+    // Negative tolerance must be rejected
+    assert.equal(amountsMatch(10, 10, -1), false, 'Negative tolerance should be rejected');
+    assert.equal(amountsMatch(10, 10, 1.5), false, 'Non-integer tolerance should be rejected');
   });
 
   await t.test('Failure path property: expiry days range validation strictly enforces 1..30 whole days', () => {
@@ -182,6 +239,31 @@ test('Issue #382: Property tests for boundary numeric and timestamp values', asy
     assert.equal(computeBackoffMs(policy, NaN), policy.baseDelayMs);
   });
 
+  await t.test('Retry path property: full jitter distribution boundary and backoff factor variations', () => {
+    const policy = {
+      maxAttempts: 10,
+      baseDelayMs: 500,
+      backoffFactor: 2,
+      maxDelayMs: 60000,
+    };
+
+    // 100 randomized jitter checks across attempts
+    for (let i = 0; i < 100; i++) {
+      const attempt = Math.floor(rand() * 20) + 1;
+      const deterministicRand = rand;
+      const jittered = computeJitteredBackoffMs(policy, attempt, deterministicRand);
+      const maxPossible = computeBackoffMs(policy, attempt);
+
+      assert.ok(jittered >= 0, `Jittered delay must be non-negative: ${jittered}`);
+      assert.ok(jittered <= maxPossible, `Jittered delay ${jittered} must be <= max possible ${maxPossible}`);
+      assert.ok(jittered <= policy.maxDelayMs, `Jittered delay ${jittered} must be <= maxDelayMs`);
+    }
+
+    // Attempt extreme: jitter with attempt 100,000 never exceeds maxDelayMs
+    const extremeJitter = computeJitteredBackoffMs(policy, 100000, () => 1.0);
+    assert.equal(extremeJitter, policy.maxDelayMs);
+  });
+
   await t.test('Authorization & Lifecycle path property: millisecond timestamp boundary and monotonicity', () => {
     const baseTime = new Date('2026-06-15T12:00:00.000Z').getTime();
     const invoice = {
@@ -205,6 +287,35 @@ test('Issue #382: Property tests for boundary numeric and timestamp values', asy
 
     // Terminal status property: PAID invoices never transition to expired
     assert.equal(isPendingInvoiceExpired({ status: 'PAID', expiresAt: new Date(baseTime).toISOString() }, new Date(baseTime + 1000)), false);
+  });
+
+  await t.test('Authorization path property: clock skew leeway window invariance and boundary tolerance', () => {
+    const issuedAt = '2026-06-15T12:00:00.000Z';
+    const expiresAt = '2026-06-15T13:00:00.000Z';
+    const skewLeewayMs = 300000; // 5 minutes leeway
+
+    const issuedMs = new Date(issuedAt).getTime();
+    const expiresMs = new Date(expiresAt).getTime();
+
+    // 1. Within exact validity window -> Authorized
+    assert.equal(isAuthorizedInWindow(issuedAt, expiresAt, '2026-06-15T12:30:00.000Z', skewLeewayMs), true);
+
+    // 2. Evaluated before issuedAt but within clock skew leeway -> Authorized
+    assert.equal(isAuthorizedInWindow(issuedAt, expiresAt, new Date(issuedMs - skewLeewayMs), skewLeewayMs), true);
+
+    // 3. Evaluated before issuedAt beyond clock skew leeway -> Rejected
+    assert.equal(isAuthorizedInWindow(issuedAt, expiresAt, new Date(issuedMs - skewLeewayMs - 1), skewLeewayMs), false);
+
+    // 4. Evaluated after expiresAt but within clock skew leeway -> Authorized
+    assert.equal(isAuthorizedInWindow(issuedAt, expiresAt, new Date(expiresMs + skewLeewayMs - 1), skewLeewayMs), true);
+
+    // 5. Evaluated after expiresAt beyond clock skew leeway -> Rejected
+    assert.equal(isAuthorizedInWindow(issuedAt, expiresAt, new Date(expiresMs + skewLeewayMs), skewLeewayMs), false);
+
+    // 6. Malformed dates or negative leeway -> Rejected
+    assert.equal(isAuthorizedInWindow('invalid-date', expiresAt, issuedAt, skewLeewayMs), false);
+    assert.equal(isAuthorizedInWindow(issuedAt, 'invalid-date', issuedAt, skewLeewayMs), false);
+    assert.equal(isAuthorizedInWindow(issuedAt, expiresAt, issuedAt, -100), false);
   });
 
   await t.test('Timezone and epoch boundary properties', () => {
